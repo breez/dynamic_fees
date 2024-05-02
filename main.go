@@ -50,27 +50,53 @@ func main() {
 	}
 	store := postgresql.NewPostgresStore(pool)
 
+	verbose := (os.Getenv("VERBOSE") == "True")
+
 	mFees, err := mempoolspace.GetRecommendedFees(os.Getenv("MEMPOOL_API_BASE_URL"))
 	if err != nil {
 		log.Printf("Error: %v", err)
 		return
 	}
-	//fmt.Printf("%#v\n", *mFees)
+	if verbose {
+		log.Printf("mempool.space: %#v\n", *mFees)
+	}
 	wFees, err := whatthefee.GetFeerateEstimation(os.Getenv("WHATTHEFEE_API_BASE_URL"))
 	if err != nil {
 		log.Printf("Error: %v", err)
 		return
 	}
-	//fmt.Printf("%#v\n", *wFees)
+	if verbose {
+		log.Printf("whatthefee: %#v\n", *wFees)
+	}
 	allParams, err := store.GetAllParams()
 	if err != nil {
 		log.Printf("Error: %v", err)
 	}
+	if verbose {
+		for k, v := range allParams {
+			log.Printf("%v ->\n ExtraData: %v\n Starlark: %s\n", k, v.ExtraData, v.Starlark)
+			for validity, params := range v.OpeningParams {
+				log.Printf(" %v -> MinFeeMsat: %v, Proportional: %v, MaxIdleTime: %v, MaxClientToSelfDelay: %v, ExtraData: %s",
+					validity,
+					params.MinFeeMsat, params.Proportional,
+					params.MaxIdleTime, params.MaxClientToSelfDelay,
+					params.ExtraData)
+			}
+		}
+	}
 	for token, p := range allParams {
-		//fmt.Printf("token: %v\nStarlark: %v\nExtraData: %s\n", token, p.Starlark, p.ExtraData)
+		if verbose {
+			log.Printf("token: %v\nStarlark: %v\nExtraData: %s\n", token, p.Starlark, p.ExtraData)
+		}
 		if p.Starlark != "" {
 			for validity, op := range p.OpeningParams {
-				//fmt.Printf("  validity:%v->%#v\n", validity, op)
+				if verbose {
+					log.Printf("  %v -> MinFeeMsat: %v, Proportional: %v, MaxIdleTime: %v, MaxClientToSelfDelay: %v, ExtraData: %s",
+						validity,
+						op.MinFeeMsat, op.Proportional,
+						op.MaxIdleTime, op.MaxClientToSelfDelay,
+						op.ExtraData)
+				}
 
 				opDict := new(starlark.Dict)
 				opDict.SetKey(starlark.String("min_msat"), starlark.MakeUint64(op.MinFeeMsat))
@@ -130,8 +156,10 @@ func main() {
 						}
 					}
 				}
-				//jop, err := json.Marshal(newOp)
-				//fmt.Printf("newOp - json: %s, err: %v\n", jop, err)
+				if verbose {
+					jop, err := json.Marshal(newOp)
+					log.Printf("newOp - json: %s, err: %v\n", jop, err)
+				}
 				store.SetOpeningParams(token, validity, newOp)
 			}
 		}
